@@ -15,7 +15,6 @@ import net.md_5.bungee.api.config.ServerInfo;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.plugin.Plugin;
 import net.md_5.bungee.api.scheduler.TaskScheduler;
-import net.md_5.bungee.api.tab.CustomTabList;
 
 public abstract class ProxyServer
 {
@@ -149,6 +148,13 @@ public abstract class ProxyServer
     public abstract void stop();
 
     /**
+     * Gracefully mark this instance for shutdown.
+     *
+     * @param reason the reason for stopping. This will be shown to players.
+     */
+    public abstract void stop(String reason);
+
+    /**
      * Start this instance so that it may accept connections.
      *
      * @throws Exception any exception thrown during startup causing the
@@ -261,14 +267,6 @@ public abstract class ProxyServer
     public abstract void broadcast(BaseComponent message);
 
     /**
-     * Gets a new instance of this proxies custom tab list.
-     *
-     * @param player the player to generate this list in the context of
-     * @return a new {@link CustomTabList} instance
-     */
-    public abstract CustomTabList customTabList(ProxiedPlayer player);
-
-    /**
      * Gets the commands which are disabled and will not be run on this proxy.
      *
      * @return the set of disabled commands
@@ -291,5 +289,15 @@ public abstract class ProxyServer
      * match
      */
     public abstract Collection<ProxiedPlayer> matchPlayer(String name);
+
+    /**
+     * Creates a new empty title configuration. In most cases you will want to
+     * {@link Title#reset()} the current title first so your title won't be
+     * affected by a previous one.
+     *
+     * @return A new empty title configuration.
+     * @see Title
+     */
+    public abstract Title createTitle();
 
 }

@@ -9,6 +9,7 @@ import com.google.common.collect.Sets;
 import com.google.gson.GsonBuilder;
 import net.md_5.bungee.api.Favicon;
 import net.md_5.bungee.api.ServerPing;
+import net.md_5.bungee.api.Title;
 import net.md_5.bungee.module.ModuleManager;
 import com.google.common.io.ByteStreams;
 import net.md_5.bungee.api.chat.BaseComponent;
@@ -36,6 +37,7 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
@@ -65,9 +67,10 @@ import net.md_5.bungee.api.config.ServerInfo;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.plugin.Plugin;
 import net.md_5.bungee.api.plugin.PluginManager;
-import net.md_5.bungee.api.tab.CustomTabList;
 import net.md_5.bungee.command.*;
+import net.md_5.bungee.compress.CompressFactory;
 import net.md_5.bungee.conf.YamlConfig;
+import net.md_5.bungee.forge.ForgeConstants;
 import net.md_5.bungee.log.LoggingOutputStream;
 import net.md_5.bungee.netty.PipelineUtils;
 import net.md_5.bungee.protocol.DefinedPacket;
@@ -76,7 +79,6 @@ import net.md_5.bungee.protocol.ProtocolConstants;
 import net.md_5.bungee.protocol.packet.Chat;
 import net.md_5.bungee.protocol.packet.PluginMessage;
 import net.md_5.bungee.query.RemoteQuery;
-import net.md_5.bungee.tab.Custom;
 import net.md_5.bungee.util.CaseInsensitiveMap;
 import org.fusesource.jansi.AnsiConsole;
 
@@ -113,6 +115,8 @@ public class BungeeCord extends ProxyServer
      * Fully qualified connections.
      */
     private final Map<String, UserConnection> connections = new CaseInsensitiveMap<>();
+    // Used to help with packet rewriting
+    private final Map<UUID, UserConnection> connectionsByOfflineUUID = new HashMap<>();
     private final ReadWriteLock connectionLock = new ReentrantReadWriteLock();
     /**
      * Plugin manager.
@@ -177,7 +181,16 @@ public class BungeeCord extends ProxyServer
             bundle = ResourceBundle.getBundle( "messages", Locale.ENGLISH );
         }
 
-        Log.setOutput( new PrintStream( ByteStreams.nullOutputStream() ) ); // TODO: Bug JLine
+        // This is a workaround for quite possibly the weirdest bug I have ever encountered in my life!
+        // When jansi attempts to extract its natives, by default it tries to extract a specific version,
+        // using the loading class's implementation version. Normally this works completely fine,
+        // however when on Windows certain characters such as - and : can trigger special behaviour.
+        // Furthermore this behaviour only occurs in specific combinations due to the parsing done by jansi.
+        // For example test-test works fine, but test-test-test does not! In order to avoid this all together but
+        // still keep our versions the same as they were, we set the override property to the essentially garbage version
+        // BungeeCord. This version is only used when extracting the libraries to their temp folder.
+        System.setProperty( "library.jansi.version", "BungeeCord" );
+
         AnsiConsole.systemInstall();
         consoleReader = new ConsoleReader();
         consoleReader.setExpandEvents( false );
@@ -186,18 +199,22 @@ public class BungeeCord extends ProxyServer
         System.setErr( new PrintStream( new LoggingOutputStream( logger, Level.SEVERE ), true ) );
         System.setOut( new PrintStream( new LoggingOutputStream( logger, Level.INFO ), true ) );
 
-        if ( consoleReader.getTerminal() instanceof UnsupportedTerminal )
+        if ( !Boolean.getBoolean( "net.md_5.bungee.native.disable" ) )
         {
-            logger.info( "Unable to initialize fancy terminal. To fix this on Windows, install the correct Microsoft Visual C++ 2008 Runtime" );
-            logger.info( "NOTE: This error is non crucial, and BungeeCord will still function correctly! Do not bug the author about it unless you are still unable to get it working" );
-        }
-
-        if ( NativeCipher.load() )
-        {
-            logger.info( "Using OpenSSL based native cipher." );
-        } else
-        {
-            logger.info( "Using standard Java JCE cipher. To enable the OpenSSL based native cipher, please make sure you are using 64 bit Ubuntu or Debian with libssl installed." );
+            if ( EncryptionUtil.nativeFactory.load() )
+            {
+                logger.info( "Using OpenSSL based native cipher." );
+            } else
+            {
+                logger.info( "Using standard Java JCE cipher. To enable the OpenSSL based native cipher, please make sure you are using 64 bit Ubuntu or Debian with libssl installed." );
+            }
+            if ( CompressFactory.zlib.load() )
+            {
+                logger.info( "Using native code compressor" );
+            } else
+            {
+                logger.info( "Using standard Java compressor. To enable zero copy compression, run on 64 bit Linux" );
+            }
         }
     }
 
@@ -213,7 +230,10 @@ public class BungeeCord extends ProxyServer
     {
         System.setProperty( "java.net.preferIPv4Stack", "true" ); // Minecraft does not support IPv6
         System.setProperty( "io.netty.selectorAutoRebuildThreshold", "0" ); // Seems to cause Bungee to stop accepting connections
-        ResourceLeakDetector.setEnabled( false ); // Eats performance
+        if ( System.getProperty( "io.netty.leakDetectionLevel" ) == null )
+        {
+            ResourceLeakDetector.setLevel( ResourceLeakDetector.Level.DISABLED ); // Eats performance
+        }
 
         eventLoops = PipelineUtils.newEventLoopGroup( 0, new ThreadFactoryBuilder().setNameFormat( "Netty IO Thread #%1$d" ).build() );
 
@@ -226,6 +246,10 @@ public class BungeeCord extends ProxyServer
 
         pluginManager.loadPlugins();
         config.load();
+
+        registerChannel( ForgeConstants.FML_TAG );
+        registerChannel( ForgeConstants.FML_HANDSHAKE_TAG );
+        registerChannel( ForgeConstants.FORGE_REGISTER );
 
         isRunning = true;
 
@@ -317,6 +341,12 @@ public class BungeeCord extends ProxyServer
     @Override
     public void stop()
     {
+        stop( getTranslation( "restart" ) );
+    }
+
+    @Override
+    public void stop(final String reason)
+    {
         new Thread( "Shutdown Thread" )
         {
             @Override
@@ -335,7 +365,7 @@ public class BungeeCord extends ProxyServer
                     getLogger().log( Level.INFO, "Disconnecting {0} connections", connections.size() );
                     for ( UserConnection user : connections.values() )
                     {
-                        user.disconnect( getTranslation( "restart" ) );
+                        user.disconnect( reason );
                     }
                 } finally
                 {
@@ -468,6 +498,18 @@ public class BungeeCord extends ProxyServer
         }
     }
 
+    public UserConnection getPlayerByOfflineUUID(UUID name)
+    {
+        connectionLock.readLock().lock();
+        try
+        {
+            return connectionsByOfflineUUID.get( name );
+        } finally
+        {
+            connectionLock.readLock().unlock();
+        }
+    }
+
     @Override
     public ProxiedPlayer getPlayer(UUID uuid)
     {
@@ -524,7 +566,7 @@ public class BungeeCord extends ProxyServer
 
     public PluginMessage registerChannels()
     {
-        return new PluginMessage( "REGISTER", Util.format( pluginChannels, "\00" ).getBytes( Charsets.UTF_8 ) );
+        return new PluginMessage( "REGISTER", Util.format( pluginChannels, "\00" ).getBytes( Charsets.UTF_8 ), false );
     }
 
     @Override
@@ -536,7 +578,7 @@ public class BungeeCord extends ProxyServer
     @Override
     public String getGameVersion()
     {
-        return "1.7.9";
+        return "1.8";
     }
 
     @Override
@@ -577,6 +619,7 @@ public class BungeeCord extends ProxyServer
         try
         {
             connections.put( con.getName(), con );
+            connectionsByOfflineUUID.put( con.getPendingConnection().getOfflineId(), con );
         } finally
         {
             connectionLock.writeLock().unlock();
@@ -588,17 +631,16 @@ public class BungeeCord extends ProxyServer
         connectionLock.writeLock().lock();
         try
         {
-            connections.remove( con.getName() );
+            // TODO See #1218
+            if ( connections.get( con.getName() ) == con )
+            {
+                connections.remove( con.getName() );
+                connectionsByOfflineUUID.remove( con.getPendingConnection().getOfflineId() );
+            }
         } finally
         {
             connectionLock.writeLock().unlock();
         }
-    }
-
-    @Override
-    public CustomTabList customTabList(ProxiedPlayer player)
-    {
-        return new Custom( player );
     }
 
     @Override
@@ -627,5 +669,11 @@ public class BungeeCord extends ProxyServer
                 return ( input == null ) ? false : input.getName().toLowerCase().contains( partialName.toLowerCase() );
             }
         } ) );
+    }
+
+    @Override
+    public Title createTitle()
+    {
+        return new BungeeTitle();
     }
 }

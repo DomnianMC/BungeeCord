@@ -1,11 +1,14 @@
 package net.md_5.bungee.api.connection;
 
 import java.util.Locale;
-import net.md_5.bungee.api.Callback;
-import net.md_5.bungee.api.CommandSender;
-import net.md_5.bungee.api.config.ServerInfo;
-import net.md_5.bungee.api.tab.TabListHandler;
+import java.util.Map;
 import java.util.UUID;
+import net.md_5.bungee.api.Callback;
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.CommandSender;
+import net.md_5.bungee.api.Title;
+import net.md_5.bungee.api.chat.BaseComponent;
+import net.md_5.bungee.api.config.ServerInfo;
 
 /**
  * Represents a player who's connection is being connected to somewhere else,
@@ -28,6 +31,22 @@ public interface ProxiedPlayer extends Connection, CommandSender
      * @param name the name to set
      */
     void setDisplayName(String name);
+
+    /**
+     * Send a message to the specified screen position of this player.
+     *
+     * @param position the screen position
+     * @param message the message to send
+     */
+    public void sendMessage(ChatMessageType position, BaseComponent... message);
+
+    /**
+     * Send a message to the specified screen position of this player.
+     *
+     * @param position the screen position
+     * @param message the message to send
+     */
+    public void sendMessage(ChatMessageType position, BaseComponent message);
 
     /**
      * Connects / transfers this user to the specified connection, gracefully
@@ -87,25 +106,6 @@ public interface ProxiedPlayer extends Connection, CommandSender
     void chat(String message);
 
     /**
-     * Sets the new tab list for the user. At this stage it is not advisable to
-     * change after the user has logged in!
-     *
-     * @param list the new list
-     * @deprecated Future Minecraft versions render this API useless
-     */
-    @Deprecated
-    void setTabList(TabListHandler list);
-
-    /**
-     * Get the current tab list.
-     *
-     * @return the tab list in use by this user
-     * @deprecated Future Minecraft versions render this API useless
-     */
-    @Deprecated
-    TabListHandler getTabList();
-
-    /**
      * Get the server which this player will be sent to next time the log in.
      *
      * @return the server, or null if default
@@ -141,4 +141,74 @@ public interface ProxiedPlayer extends Connection, CommandSender
      * @return the locale
      */
     Locale getLocale();
+
+    /**
+     * Set the header and footer displayed in the tab player list.
+     *
+     * @param header The header for the tab player list, null to clear it.
+     * @param footer The footer for the tab player list, null to clear it.
+     */
+    void setTabHeader(BaseComponent header, BaseComponent footer);
+
+    /**
+     * Set the header and footer displayed in the tab player list.
+     *
+     * @param header The header for the tab player list, null to clear it.
+     * @param footer The footer for the tab player list, null to clear it.
+     */
+    void setTabHeader(BaseComponent[] header, BaseComponent[] footer);
+
+    /**
+     * Clears the header and footer displayed in the tab player list.
+     */
+    void resetTabHeader();
+
+    /**
+     * Sends a {@link Title} to this player. This is the same as calling
+     * {@link Title#send(ProxiedPlayer)}.
+     *
+     * @param title The title to send to the player.
+     * @see Title
+     */
+    void sendTitle(Title title);
+
+    /**
+     * Gets whether this player is using a FML client.
+     * <p>
+     * This method is only reliable if BungeeCord links Minecraft 1.8 servers
+     * together, as Bungee can pick up whether a user is a Forge user with the
+     * initial handshake. If this is used for a 1.7 network, this might return
+     * <code>false</code> even if the user is a FML user, as Bungee can only
+     * determine this information if a handshake successfully completes.
+     * </p>
+     *
+     * @return <code>true</code> if it is known that the user is using a FML
+     * client, <code>false</code> otherwise.
+     */
+    boolean isForgeUser();
+
+    /**
+     * Gets this player's Forge Mod List, if the player has sent this
+     * information during the lifetime of their connection to Bungee. There is
+     * no guarantee that information is available at any time, as it is only
+     * sent during a FML handshake. Therefore, this will only contain
+     * information for a user that has attempted joined a Forge server.
+     * <p>
+     * Consumers of this API should be aware that an empty mod list does
+     * <em>not</em> indicate that a user is not a Forge user, and so should not
+     * use this API to check for this. See the {@link #isForgeUser()
+     * isForgeUser} method instead.
+     * </p>
+     * <p>
+     * Calling this when handling a
+     * {@link net.md_5.bungee.api.event.ServerConnectedEvent} may be the best
+     * place to do so as this event occurs after a FML handshake has completed,
+     * if any has occurred.
+     * </p>
+     *
+     * @return A {@link Map} of mods, where the key is the name of the mod, and
+     * the value is the version. Returns an empty list if the FML handshake has
+     * not occurred for this {@link ProxiedPlayer} yet.
+     */
+    Map<String, String> getModList();
 }

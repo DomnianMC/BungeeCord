@@ -39,7 +39,7 @@ public class CommandServer extends Command implements TabExecutor
         Map<String, ServerInfo> servers = ProxyServer.getInstance().getServers();
         if ( args.length == 0 )
         {
-            player.sendMessage( ProxyServer.getInstance().getTranslation( "current_server" ) + player.getServer().getInfo().getName() );
+            player.sendMessage( ProxyServer.getInstance().getTranslation( "current_server", player.getServer().getInfo().getName() ) );
             TextComponent serverList = new TextComponent( ProxyServer.getInstance().getTranslation( "server_list" ) );
             serverList.setColor( ChatColor.GOLD );
             boolean first = true;
@@ -76,14 +76,16 @@ public class CommandServer extends Command implements TabExecutor
     }
 
     @Override
-    public Iterable<String> onTabComplete(final CommandSender sender, String[] args)
+    public Iterable<String> onTabComplete(final CommandSender sender, final String[] args)
     {
-        return ( args.length != 0 ) ? Collections.EMPTY_LIST : Iterables.transform( Iterables.filter( ProxyServer.getInstance().getServers().values(), new Predicate<ServerInfo>()
+        return ( args.length > 1 ) ? Collections.EMPTY_LIST : Iterables.transform( Iterables.filter( ProxyServer.getInstance().getServers().values(), new Predicate<ServerInfo>()
         {
+            private final String lower = ( args.length == 0 ) ? "" : args[0].toLowerCase();
+
             @Override
             public boolean apply(ServerInfo input)
             {
-                return input.canAccess( sender );
+                return input.getName().toLowerCase().startsWith( lower ) && input.canAccess( sender );
             }
         } ), new Function<ServerInfo, String>()
         {

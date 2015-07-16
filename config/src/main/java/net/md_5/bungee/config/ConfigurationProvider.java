@@ -2,6 +2,7 @@ package net.md_5.bungee.config;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.HashMap;
@@ -29,7 +30,17 @@ public abstract class ConfigurationProvider
 
     public abstract Configuration load(File file) throws IOException;
 
+    public abstract Configuration load(File file, Configuration defaults) throws IOException;
+
     public abstract Configuration load(Reader reader);
 
+    public abstract Configuration load(Reader reader, Configuration defaults);
+
+    public abstract Configuration load(InputStream is);
+
+    public abstract Configuration load(InputStream is, Configuration defaults);
+
     public abstract Configuration load(String string);
+
+    public abstract Configuration load(String string, Configuration defaults);
 }

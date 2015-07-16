@@ -50,7 +50,7 @@ public class Configuration implements ProxyConfig
     private int playerLimit = -1;
     private Collection<String> disabledCommands;
     private int throttle = 4000;
-    private boolean ipFoward;
+    private boolean ipForward;
     private Favicon favicon;
 
     public void load()
@@ -76,7 +76,7 @@ public class Configuration implements ProxyConfig
         onlineMode = adapter.getBoolean( "online_mode", onlineMode );
         playerLimit = adapter.getInt( "player_limit", playerLimit );
         throttle = adapter.getInt( "connection_throttle", throttle );
-        ipFoward = adapter.getBoolean( "ip_forward", ipFoward );
+        ipForward = adapter.getBoolean( "ip_forward", ipForward );
 
         disabledCommands = new CaseInsensitiveSet( (Collection<String>) adapter.getList( "disabled_commands", Arrays.asList( "disabledcommandhere" ) ) );
 
@@ -93,7 +93,7 @@ public class Configuration implements ProxyConfig
             for ( ServerInfo oldServer : servers.values() )
             {
                 // Don't allow servers to be removed
-                Preconditions.checkArgument( newServers.containsValue( oldServer ), "Server %s removed on reload!", oldServer.getName() );
+                Preconditions.checkArgument( newServers.containsKey( oldServer.getName() ), "Server %s removed on reload!", oldServer.getName() );
             }
 
             // Add new servers

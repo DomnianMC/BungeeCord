@@ -25,6 +25,9 @@ public class ServerConnection implements Server
     @Getter
     @Setter
     private boolean isObsolete;
+    @Getter
+    private final boolean forgeServer = false;
+
     private final Unsafe unsafe = new Unsafe()
     {
         @Override
@@ -37,7 +40,7 @@ public class ServerConnection implements Server
     @Override
     public void sendData(String channel, byte[] data)
     {
-        unsafe().sendPacket( new PluginMessage( channel, data ) );
+        unsafe().sendPacket( new PluginMessage( channel, data, forgeServer ) );
     }
 
     @Override
@@ -51,8 +54,6 @@ public class ServerConnection implements Server
     {
         if ( !ch.isClosed() )
         {
-            // TODO: Can we just use a future here?
-            unsafe().sendPacket( new Kick( ComponentSerializer.toString( reason ) ) );
             ch.getHandle().eventLoop().schedule( new Runnable()
             {
                 @Override

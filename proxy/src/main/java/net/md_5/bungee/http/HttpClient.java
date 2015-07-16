@@ -68,8 +68,8 @@ public class HttpClient
                 callback.done( null, ex );
                 return;
             }
+            addressCache.put( uri.getHost(), inetHost );
         }
-        addressCache.put( uri.getHost(), inetHost );
 
         ChannelFutureListener future = new ChannelFutureListener()
         {
@@ -91,7 +91,7 @@ public class HttpClient
             }
         };
 
-        new Bootstrap().channel( PipelineUtils.getChannel() ).group( eventLoop ).handler( new HttpInitializer( callback, ssl ) ).
+        new Bootstrap().channel( PipelineUtils.getChannel() ).group( eventLoop ).handler( new HttpInitializer( callback, ssl, uri.getHost(), port ) ).
                 option( ChannelOption.CONNECT_TIMEOUT_MILLIS, TIMEOUT ).remoteAddress( inetHost, port ).connect().addListener( future );
     }
 }
